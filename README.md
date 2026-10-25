@@ -2,6 +2,8 @@
 
 貼上學員名單，批次產出結業證書（PDF、PNG、JPG）。純前端，不需安裝，也不會把名單上傳到任何伺服器。
 
+![結業證書產生器畫面（範例姓名：王小明）](docs/screenshot.webp)
+
 ## 開啟方式
 
 用 Chrome 或 Edge 直接開啟 `index.html`。
