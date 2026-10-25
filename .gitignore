@@ -1,0 +1,8 @@
+# Local-only files (not part of the open-source release)
+_backup_v1/
+.claude/
+成品參考範例.png
+文字空白版本.png
+改進清單.md
+
+node_modules/

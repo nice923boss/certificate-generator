@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>結業證書產生器</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="panel" aria-label="設定">
+      <header class="panel-head">
+        <h1>結業證書產生器 <span class="version">v2.0</span></h1>
+        <button id="helpBtn" type="button" class="ghost" title="使用說明與快捷鍵（F1）">說明</button>
+      </header>
+      <p id="saveStatus" class="save-status" aria-live="polite"></p>
+
+      <details class="section" data-section="roster" open>
+        <summary>學員名單 <span id="rosterCount" class="hint"></span></summary>
+        <div class="section-body">
+          <div id="rosterZone" class="drop-zone">
+            <label for="roster" class="sr-only">學員名單</label>
+            <textarea id="roster" rows="9" spellcheck="false" placeholder="一行一位，或用逗號、頓號分隔&#10;也可從 Excel 直接貼上整張表（首列要有「姓名」）&#10;# 開頭的行會被略過&#10;可把 .xlsx、.csv、.txt 檔拖進來"></textarea>
+          </div>
+          <div class="row wrap">
+            <label class="button" for="rosterFile" title="匯入 Excel（.xlsx）、CSV、TSV 或 TXT">匯入檔案</label>
+            <input id="rosterFile" type="file" accept=".xlsx,.csv,.tsv,.txt,text/plain,text/csv" class="sr-only">
+            <button id="rosterTemplate" type="button" title="下載含「姓名」欄的 CSV 範本">下載範本</button>
+            <button id="rosterClear" type="button" class="danger-text">清空</button>
+          </div>
+          <p id="rosterStats" class="note"></p>
+          <details class="sub">
+            <summary>整理名單</summary>
+            <div class="checks">
+              <label><input id="cleanNumbering" type="checkbox" checked> 去掉行首編號（1. 、(2)）</label>
+              <label><input id="cleanSpaces" type="checkbox" checked> 合併中文姓名中的空白</label>
+              <label><input id="cleanHalfWidth" type="checkbox"> 全形英數轉半形</label>
+              <label><input id="cleanDedupe" type="checkbox"> 移除重複姓名</label>
+            </div>
+            <button id="rosterCleanBtn" type="button">開始整理</button>
+          </details>
+          <div class="people">
+            <label for="peopleSearch" class="sr-only">搜尋學員</label>
+            <input id="peopleSearch" type="search" placeholder="搜尋學員">
+            <ul id="peopleList" class="people-list" aria-label="學員清單"></ul>
+          </div>
+        </div>
+      </details>
+
+      <details class="section" data-section="fields" open>
+        <summary>證書內容</summary>
+        <div class="section-body">
+          <div class="vars">
+            <span class="note">插入變數：</span>
+            <span id="varChips" class="chips"></span>
+          </div>
+          <div id="fieldList" class="field-list"></div>
+          <details class="sub">
+            <summary>文字選項</summary>
+            <label for="sampleName">名單空白時的範例姓名</label>
+            <input id="sampleName" type="text" maxlength="30">
+            <div class="checks">
+              <label><input id="optAutoSpace" type="checkbox"> 中文與英數之間自動加空白</label>
+              <label><input id="optHalfWidth" type="checkbox"> 全形英數一律以半形顯示</label>
+            </div>
+          </details>
+        </div>
+      </details>
+
+      <details class="section" data-section="layout">
+        <summary>版面調整</summary>
+        <div class="section-body" id="layoutPanel"></div>
+      </details>
+
+      <details class="section" data-section="fonts">
+        <summary>字型</summary>
+        <div class="section-body" id="fontPanel"></div>
+      </details>
+
+      <details class="section" data-section="settings">
+        <summary>範本與設定組合</summary>
+        <div class="section-body" id="settingsPanel"></div>
+      </details>
+
+      <details class="section" data-section="export" open>
+        <summary>匯出選項</summary>
+        <div class="section-body" id="exportPanel"></div>
+      </details>
+
+      <div class="actions">
+        <button id="exportBtn" class="primary" type="button">下載 PDF</button>
+        <div class="row">
+          <button id="pngBtn" type="button" title="下載目前這一張的 PNG 圖片">目前這張 PNG</button>
+          <button id="printBtn" type="button" title="直接列印（Ctrl＋P）">列印</button>
+        </div>
+        <div id="progressBox" class="progress-box" hidden>
+          <progress id="progress" max="1" value="0" aria-label="匯出進度"></progress>
+          <div class="row">
+            <span id="progressText" class="note" aria-live="polite"></span>
+            <button id="cancelBtn" type="button">取消</button>
+          </div>
+        </div>
+        <p id="exportSummary" class="note" aria-live="polite"></p>
+      </div>
+    </aside>
+
+    <main class="stage" id="stage">
+      <div class="toolbar" role="toolbar" aria-label="預覽工具列">
+        <div class="pager">
+          <button id="firstBtn" type="button" class="icon" title="第一位（Home）" aria-label="第一位">⏮</button>
+          <button id="prevBtn" type="button" class="icon" title="上一位（←）" aria-label="上一位">‹</button>
+          <label for="pageInput" class="sr-only">目前頁碼</label>
+          <input id="pageInput" type="number" min="1" value="1" class="page-input">
+          <span id="pageTotal" class="page-total"></span>
+          <button id="nextBtn" type="button" class="icon" title="下一位（→）" aria-label="下一位">›</button>
+          <button id="lastBtn" type="button" class="icon" title="最後一位（End）" aria-label="最後一位">⏭</button>
+          <span id="pageName" class="page-name"></span>
+        </div>
+        <div class="tools">
+          <label for="zoomSelect" class="sr-only">縮放</label>
+          <select id="zoomSelect" title="縮放（Ctrl＋滾輪）">
+            <option value="fit">符合視窗</option>
+            <option value="0.25">25%</option>
+            <option value="0.5">50%</option>
+            <option value="0.75">75%</option>
+            <option value="1">100%</option>
+            <option value="1.5">150%</option>
+          </select>
+          <button id="modeBtn" type="button" aria-pressed="false" title="切換單張預覽與全部縮圖">縮圖總覽</button>
+          <button id="guidesBtn" type="button" aria-pressed="false" title="顯示置中線與安全邊界">參考線</button>
+          <button id="textOnlyBtn" type="button" aria-pressed="false" title="隱藏底圖，檢查套印的文字位置">只看文字</button>
+          <button id="fullscreenBtn" type="button" title="全螢幕預覽">全螢幕</button>
+        </div>
+      </div>
+      <div id="tip" class="tip" hidden>
+        <p>快速上手：① 貼上或匯入學員名單 ② 修改證書內容 ③ 在預覽上拖曳文字調整位置 ④ 按「下載 PDF」。</p>
+        <button id="tipClose" type="button" class="ghost">知道了</button>
+      </div>
+      <div class="viewport" id="viewport">
+        <div class="sheet" id="sheet">
+          <canvas id="preview" tabindex="0" role="img" aria-label="證書預覽"></canvas>
+          <div class="overlay" id="overlay" aria-hidden="true">
+            <div class="guides" id="guides"></div>
+            <div class="crop" id="crop" hidden></div>
+            <div class="snap-line" id="snapLine" hidden></div>
+            <div class="select-box" id="selectBox" hidden><span id="selectLabel"></span></div>
+            <div class="coords" id="coords" hidden></div>
+          </div>
+          <div class="loading" id="loading">載入中…</div>
+        </div>
+        <div class="grid" id="grid" hidden></div>
+      </div>
+      <p id="pageWarnings" class="page-warnings" aria-live="polite"></p>
+    </main>
+  </div>
+
+  <footer class="credit">製作者：黃政文</footer>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <dialog id="dialog" aria-labelledby="dialogTitle">
+    <form method="dialog">
+      <h2 id="dialogTitle"></h2>
+      <div id="dialogBody"></div>
+      <div id="dialogInputWrap" hidden>
+        <label id="dialogInputLabel" for="dialogInput"></label>
+        <input id="dialogInput" type="text" maxlength="60">
+      </div>
+      <div class="dialog-actions">
+        <button id="dialogCancel" type="button">取消</button>
+        <button id="dialogOk" type="submit" value="ok" class="primary-small">確定</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="helpDialog" aria-labelledby="helpTitle">
+    <form method="dialog">
+      <h2 id="helpTitle">使用說明</h2>
+      <ol class="help">
+        <li>名單：一行一位，也可從 Excel 貼上整張表。首列有「姓名」時進入表格模式，「班級名稱」「講師」「日期」「證書編號」等欄會逐人覆寫證書內容，其他欄可在文字中用 {欄名} 引用。</li>
+        <li>證書內容：可用 {姓名}、{序號}、{總數} 等變數。每一欄按「⋯」可設定前綴、後綴、字型與隱藏。</li>
+        <li>版面：在預覽上點選文字後拖曳，或用方向鍵微調；「版面調整」區可改字級、字距、對齊與樣式。每個範本的版面分開儲存。</li>
+        <li>字型：Chrome、Edge 可讀取電腦已安裝的字型；任何瀏覽器都可上傳 .ttf、.otf、.woff 字型檔。</li>
+        <li>匯出：合併 PDF、每人一份 PDF、PNG、JPG（打包成 ZIP），可選範圍、紙張與檔名樣式。</li>
+        <li>設定會自動存在這台電腦的瀏覽器裡，可另存成「設定組合」或匯出 JSON 帶到別台電腦。</li>
+      </ol>
+      <h3>快捷鍵</h3>
+      <table class="keys">
+        <tbody>
+          <tr><th scope="row">← →</th><td>上一位、下一位（已選取文字時為移動文字）</td></tr>
+          <tr><th scope="row">Home／End</th><td>第一位、最後一位</td></tr>
+          <tr><th scope="row">PageUp／PageDown</th><td>往前、往後 10 位</td></tr>
+          <tr><th scope="row">方向鍵</th><td>移動選取的文字 1 px（加 Shift 為 10 px）</td></tr>
+          <tr><th scope="row">＋／－</th><td>放大、縮小選取的文字</td></tr>
+          <tr><th scope="row">Esc</th><td>取消選取</td></tr>
+          <tr><th scope="row">雙擊文字</th><td>跳到對應的輸入框</td></tr>
+          <tr><th scope="row">拖曳時按 Alt</th><td>暫停置中吸附</td></tr>
+          <tr><th scope="row">Ctrl＋滾輪</th><td>縮放預覽</td></tr>
+          <tr><th scope="row">Ctrl＋P</th><td>列印證書</td></tr>
+          <tr><th scope="row">F1</th><td>開啟這份說明</td></tr>
+        </tbody>
+      </table>
+      <div class="dialog-actions">
+        <button type="submit" class="primary-small">關閉</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="printArea" class="print-area" aria-hidden="true"></div>
+
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="templates/bg-navy-gold.js"></script>
+  <script src="js/core/text.js"></script>
+  <script src="js/core/table.js"></script>
+  <script src="js/core/zip.js"></script>
+  <script src="js/core/xlsx.js"></script>
+  <script src="js/core/fields.js"></script>
+  <script src="js/core/pages.js"></script>
+  <script src="js/core/settings.js"></script>
+  <script src="js/templates.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/fonts.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/ui-common.js"></script>
+  <script src="js/ui-roster.js"></script>
+  <script src="js/ui-fields.js"></script>
+  <script src="js/ui-layout.js"></script>
+  <script src="js/ui-preview.js"></script>
+  <script src="js/ui-grid.js"></script>
+  <script src="js/ui-fonts.js"></script>
+  <script src="js/ui-settings.js"></script>
+  <script src="js/ui-export.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
